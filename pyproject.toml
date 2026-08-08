@@ -1,0 +1,31 @@
+[project]
+name = "vpr-rir-refactor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Louis Lalay", email = "louis.lalay@telecom-paris.fr" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "torch>=2.13.0",
+]
+
+[project.scripts]
+vpr-rir-refactor = "vpr_rir_refactor:main"
+
+[build-system]
+requires = ["uv_build>=0.11.29,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "coverage>=7.15.4",
+    "matplotlib>=3.11.1",
+    "pyqt6>=6.11.0",
+    "pytest>=9.1.1",
+    "taylor-swft",
+]
+
+[tool.uv.sources]
+taylor-swft = { git = "https://github.com/TAYLOR-SWFT/Taylor-SWFT.git" }
