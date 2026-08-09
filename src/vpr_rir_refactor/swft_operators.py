@@ -1,10 +1,47 @@
-import torch
-from typing import cast
-from torch import Tensor
-from warnings import warn
+from matplotlib.axes import Axes
 from scipy.interpolate import PchipInterpolator
+from torch import Tensor
+from torch.utils.tensorboard.writer import SummaryWriter
+from typing import cast
+from warnings import warn
+import matplotlib.pyplot as plt
+import torch
 
 from . import constants
+
+
+def plot_rt60_operator(alpha: Tensor, sr: int, ax: Axes):
+    # RT60 profile
+    rt_profile = alpha_to_rt_profile(alpha)
+    freqs = torch.linspace(0, sr // 2, rt_profile.shape[0])
+    ax.plot(rt_profile, freqs)
+    ax.set_xlabel("RT60 (s)")
+    ax.set_ylabel("Frequency (Hz)")
+
+
+def plot_mode_filter(g: Tensor, sr: int, ax: Axes):
+    nfft = 2 ** (int(g.shape[0]).bit_length() + 1)
+    modes = cast(Tensor, torch.fft.rfft(g, nfft))
+    freqs = torch.linspace(0, sr // 2, modes.shape[0])
+    ax.plot(modes.abs(), freqs)
+    ax.set_xlabel("Modes amplitude")
+    ax.set_ylabel("Frequency (Hz)")
+
+
+def log_swft_parameters(
+    logger: SummaryWriter,
+    alpha: Tensor,
+    g: Tensor,
+    current_step: int,
+    sr: int,
+):
+
+    fig = plt.figure(figsize=(12, 6))
+    axs: list[Axes] = fig.subplots(1, 2)
+    plot_rt60_operator(alpha, sr, axs[0])
+    plot_mode_filter(g, sr, axs[1])
+
+    logger.add_figure(tag="SWFT Operators", figure=fig, global_step=current_step)
 
 
 def create_linear_RT_profile(
@@ -52,6 +89,21 @@ def rt_profile_to_alpha(linear_rt_profile: Tensor) -> Tensor:
     """
 
     return 3 * torch.log(torch.tensor(10.0)) / (linear_rt_profile)
+
+
+def alpha_to_rt_profile(alpha: Tensor) -> Tensor:
+    """
+    Convert SWFT parameters to a linear RT60 profile.
+
+    Args:
+        alpha (Tensor):
+            The tensor $alpha(f)$ of shape (n_fft) containing the SWFT parameters for each FFT point.
+    Returns:
+        Tensor:
+            The linear RT60 profile tensor of shape (n_fft).
+    """
+
+    return 3 * torch.log(torch.tensor(10.0)) / (alpha)
 
 
 def alpha_to_p_fourier(alpha: Tensor, sr: int) -> Tensor:
