@@ -11,3 +11,7 @@ wheels/
 
 # Tests
 .coverage
+sandbox.py
+
+# Experiments
+runs
