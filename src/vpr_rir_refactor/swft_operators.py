@@ -122,7 +122,11 @@ def alpha_to_p_fourier(alpha: Tensor, sr: int) -> Tensor:
     return torch.exp(-alpha / (sr))
 
 
-def init_taylor_mul(Lh: int) -> tuple[int, Tensor, Tensor]:
+def init_taylor_mul(
+    Lh: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> tuple[int, Tensor, Tensor]:
     """
     Initialize the Taylor multiplication operator.
 
@@ -135,10 +139,10 @@ def init_taylor_mul(Lh: int) -> tuple[int, Tensor, Tensor]:
         Tensor:
             arange(Lh) used in the Taylor multiplication operator.
         Tensor:
-            omega, the Fourier basis of size (nfft)
+            omega, the Fourier basis of size (nfft // 2 + 1) for real signals
     """
     nfft = int(1.1 * Lh)
-    taylor_arange = torch.arange(Lh, dtype=torch.get_default_dtype())
+    taylor_arange = torch.arange(Lh, dtype=dtype, device=device)
     omega = torch.exp(-2j * torch.pi * taylor_arange[: nfft // 2 + 1] / nfft)
     return nfft, taylor_arange, omega
 
