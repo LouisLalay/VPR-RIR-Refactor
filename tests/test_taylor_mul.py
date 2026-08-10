@@ -83,7 +83,11 @@ def test_init_taylor_mul():
     omega_ref = p_op_ref.omega
     taylor_arange_ref = p_op_ref.taylor_arange
 
-    nfft_test, taylor_arange_test, omega_test = init_taylor_mul(Lh)
+    nfft_test, taylor_arange_test, omega_test = init_taylor_mul(
+        Lh,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
 
     assert nfft_ref == nfft_test
     assert torch.allclose(omega_ref, omega_test)
