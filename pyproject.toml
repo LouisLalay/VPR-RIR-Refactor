@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "selfeeg>=0.2.2",
     "taylor-swft>=0.1.0",
     "tensorboard>=2.21.0",
     "torch>=2.13.0",
@@ -23,6 +24,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "coverage>=7.15.4",
+    "jupyter>=1.1.1",
     "matplotlib>=3.11.1",
     "pyqt6>=6.11.0",
     "pytest>=9.1.1",
