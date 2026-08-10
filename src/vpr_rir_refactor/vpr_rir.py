@@ -132,6 +132,7 @@ class VPR_RIR2:
                 self.g.detach().cpu(),
                 current_step,
                 self.sr,
+                tag="Parameters/SWFT_Parameters",
             )
             swft_operators.log_rirs(
                 self.logger,
@@ -140,10 +141,30 @@ class VPR_RIR2:
                 self.sr,
                 current_step,
             )
+            swft_operators.log_epsilon(
+                self.logger,
+                self.mu_epsilon.detach().cpu(),
+                self.r_epsilon.detach().cpu(),
+                current_step,
+                self.sr,
+                tag="Parameters/Epsilon",
+            )
             self.logger.add_scalar("Loss/loss", self.last_loss, current_step)
             self.logger.add_scalar("Loss/elbo_y", self.last_elbo_y, current_step)
             self.logger.add_scalar(
-                "Loss/elbo_epsilon", self.last_elbo_epsilon, current_step
+                "Loss/elbo_epsilon",
+                self.last_elbo_epsilon,
+                current_step,
+            )
+            self.logger.add_scalar(
+                "Parameters/sigma_w_2",
+                self.sigma_w_2.item(),
+                current_step,
+            )
+            self.logger.add_scalar(
+                "Parameters/sigma_epsilon_2",
+                self.sigma_epsilon_2.item(),
+                current_step,
             )
 
     def mu_h(self) -> Tensor:
@@ -239,7 +260,7 @@ class VPR_RIR2:
         self.parameters_sanity_check()
 
     def fit(self, n_step: int, log_freq: int):
-        self.init_optimizer(lr=1e-2)
+        self.init_optimizer(lr=1e-3)
         with torch.no_grad():
             self.loss()
         for k in tqdm(range(n_step)):

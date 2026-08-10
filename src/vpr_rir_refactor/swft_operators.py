@@ -36,6 +36,7 @@ def log_swft_parameters(
     g: Tensor,
     current_step: int,
     sr: int,
+    tag: str = "SWFT_Parameters",
 ):
 
     fig = plt.figure(figsize=(12, 6))
@@ -43,7 +44,7 @@ def log_swft_parameters(
     plot_rt60_operator(alpha, sr, axs[0])
     plot_mode_filter(g, sr, axs[1])
 
-    logger.add_figure(tag="SWFT Operators", figure=fig, global_step=current_step)
+    logger.add_figure(tag=tag, figure=fig, global_step=current_step)
 
 
 def plot_rirs(rir_ref: Tensor, rir_other: Tensor, sr: int, ax: Axes):
@@ -86,6 +87,43 @@ def log_rirs(
     plot_rirs(rir_ref, rir_other, sr, axs[0])
     plot_rir_diff(rir_ref, rir_other, sr, axs[1])
     logger.add_figure(tag="RIRS", figure=fig, global_step=current_step)
+
+
+def plot_epsilon(
+    mu_epsilon: Tensor,
+    r_epsilon: Tensor,
+    sr: int,
+    ax: Axes,
+):
+    Lh = mu_epsilon.shape[0]
+    time = torch.arange(Lh) / sr
+
+    ax.plot(time, mu_epsilon, label="Mean")
+    ax.fill_between(
+        time,
+        mu_epsilon - r_epsilon.sqrt(),
+        mu_epsilon + r_epsilon.sqrt(),
+        alpha=0.5,
+        label="Std Dev",
+    )
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
+    ax.legend()
+    ax.set_title("Epsilon Distribution $\\epsilon(t)$")
+
+
+def log_epsilon(
+    logger: SummaryWriter,
+    mu_epsilon: Tensor,
+    r_epsilon: Tensor,
+    current_step: int,
+    sr: int,
+    tag: str = "Epsilon",
+):
+    fig = plt.figure(figsize=(6, 6))
+    ax = fig.gca()
+    plot_epsilon(mu_epsilon, r_epsilon, sr, ax)
+    logger.add_figure(tag=tag, figure=fig, global_step=current_step)
 
 
 def create_linear_RT_profile(
