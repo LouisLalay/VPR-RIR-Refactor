@@ -8,6 +8,8 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "taylor-swft>=0.1.0",
+    "tensorboard>=2.21.0",
     "torch>=2.13.0",
 ]
 

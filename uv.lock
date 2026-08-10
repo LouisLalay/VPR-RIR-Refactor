@@ -1245,6 +1245,7 @@ name = "vpr-rir-refactor"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "taylor-swft" },
     { name = "tensorboard" },
     { name = "torch" },
 ]
@@ -1260,6 +1261,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "taylor-swft", git = "https://github.com/TAYLOR-SWFT/Taylor-SWFT.git" },
     { name = "tensorboard", specifier = ">=2.21.0" },
     { name = "torch", specifier = ">=2.13.0" },
 ]
