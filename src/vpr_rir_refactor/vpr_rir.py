@@ -20,6 +20,7 @@ class VPR_RIR2:
         reference_rir: Tensor,
         Lh: int,
         Lg: int,
+        Lalpha: int,
         sr: int,
         device: torch.device,
         dtype: torch.dtype,
@@ -34,6 +35,8 @@ class VPR_RIR2:
         self.Lh = Lh
         # Desired mode filter length
         self.Lg = Lg
+        # Desired RT profile length
+        self.Lp = Lalpha
         # Source signal length
         self.Ls = source.shape[0]
         # Full signal length
@@ -53,7 +56,8 @@ class VPR_RIR2:
         self.sigma_epsilon_2 = Parameter(torch.empty(1, **self.tensor_args))
 
         # SWFT parameters
-        self.alpha = Parameter(torch.empty(self.nfft // 2 + 1, **self.tensor_args))
+        self.alpha = Parameter(torch.empty(self.Lp, **self.tensor_args))
+        self.alpha_freqs = torch.linspace(0, sr / 2, self.Lp, **self.tensor_args)
         self.g = Parameter(torch.empty(Lg, **self.tensor_args))
 
         # Noise parameter
@@ -168,11 +172,18 @@ class VPR_RIR2:
             )
 
     def mu_h(self) -> Tensor:
+        current_rt = swft_operators.alpha_to_rt_profile(self.alpha)
+        full_rt = swft_operators.create_linear_RT_profile(
+            current_rt,
+            self.alpha_freqs,
+            self.nfft,
+        )
+        full_alpha = swft_operators.rt_profile_to_alpha(full_rt)
         mu_h_bar = swft_operators.taylor_mul(
             self.mu_epsilon,
             self.taylor_arange,
             self.omega,
-            swft_operators.alpha_to_p_fourier(self.alpha, self.sr),
+            swft_operators.alpha_to_p_fourier(full_alpha, self.sr),
             self.nfft,
         )
         mu_h = fftconvolve(mu_h_bar, self.g, mode="same")
