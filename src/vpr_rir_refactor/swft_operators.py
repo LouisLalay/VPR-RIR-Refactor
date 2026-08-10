@@ -52,7 +52,7 @@ def plot_rirs(rir_ref: Tensor, rir_other: Tensor, sr: int, ax: Axes):
     time = torch.arange(max(L1, L2)) / sr
 
     ax.plot(time[:L1], rir_ref, color="red", alpha=0.5, label="Reference")
-    ax.plot(time[:L1], rir_ref, linestyle="--", alpha=0.5, label="Estimation")
+    ax.plot(time[:L2], rir_other, label="Estimation")
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Amplitude")
     ax.legend()
