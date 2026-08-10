@@ -1,3 +1,4 @@
+from . import constants
 from . import swft_operators
 from .evaluate import log_metrics
 
@@ -6,6 +7,7 @@ from pathlib import Path
 from torch import Tensor
 from torch.nn import Parameter
 from torch.utils.tensorboard.writer import SummaryWriter
+from torchaudio.functional import fftconvolve
 from tqdm import tqdm
 import torch
 
@@ -32,6 +34,10 @@ class VPR_RIR2:
         self.Lh = Lh
         # Desired mode filter length
         self.Lg = Lg
+        # Source signal length
+        self.Ls = source.shape[0]
+        # Full signal length
+        self.Ly = self.Ls + self.Lh - 1
         # Sampling rate
         self.sr = sr
 
@@ -54,14 +60,17 @@ class VPR_RIR2:
         self.sigma_w_2 = Parameter(torch.empty(1, **self.tensor_args))
 
         # Known variables
-        self.y = reverberant_signal.to(**self.tensor_args)
+        self.y = reverberant_signal[: self.Ly].to(**self.tensor_args)
         self.s = source.to(**self.tensor_args)
-        self.rir_ref = reference_rir.to(**self.tensor_args)
+        self.rir_ref = reference_rir.to(dtype=dtype)
 
         # Init tensorboard
         exp_name = datetime.now().strftime("%Y-%m-%d %Hh%M-%S")
         self.full_exp_path = Path(experiment_dir) / exp_name
         self.logger = SummaryWriter(self.full_exp_path)
+
+        # Init constants for loss computation
+        self.init_constants()
 
         # Init the parameters
         self.init_parameters()
@@ -102,18 +111,14 @@ class VPR_RIR2:
 
         self.sigma_w_2.data[0] = 1
 
+    def init_constants(self):
+        self.y_norm = self.y @ self.y
+
     def log_step(self, current_step: int, log_freq: int):
         if current_step % log_freq:
             return
         with torch.no_grad():
-            current_p_fourier = swft_operators.alpha_to_p_fourier(self.alpha, self.sr)
-            current_rir_estimate = swft_operators.taylor_mul(
-                self.mu_epsilon,
-                self.taylor_arange,
-                self.omega,
-                current_p_fourier,
-                self.nfft,
-            )
+            current_rir_estimate = self.mu_h().detach().cpu()
             log_metrics(
                 self.logger,
                 self.rir_ref,
@@ -123,8 +128,8 @@ class VPR_RIR2:
             )
             swft_operators.log_swft_parameters(
                 self.logger,
-                self.alpha,
-                self.g,
+                self.alpha.detach().cpu(),
+                self.g.detach().cpu(),
                 current_step,
                 self.sr,
             )
@@ -135,11 +140,109 @@ class VPR_RIR2:
                 self.sr,
                 current_step,
             )
+            self.logger.add_scalar("Loss/loss", self.last_loss, current_step)
+            self.logger.add_scalar("Loss/elbo_y", self.last_elbo_y, current_step)
+            self.logger.add_scalar(
+                "Loss/elbo_epsilon", self.last_elbo_epsilon, current_step
+            )
+
+    def mu_h(self) -> Tensor:
+        mu_h_bar = swft_operators.taylor_mul(
+            self.mu_epsilon,
+            self.taylor_arange,
+            self.omega,
+            swft_operators.alpha_to_p_fourier(self.alpha, self.sr),
+            self.nfft,
+        )
+        mu_h = fftconvolve(mu_h_bar, self.g, mode="same")
+        return mu_h
+
+    def elbo_y(self) -> Tensor:
+        mu_h = self.mu_h()
+
+        # E[ || y - s * h ||^2 ] = ||y||^2 - 2 y^T E[s * h] + E[ || s * h ||^2 ]
+        #  E[s * h] = mu_h * s
+        expec_first_order = fftconvolve(mu_h, self.s, mode="full")
+
+        # E[ || s * h ||^2 ] = || mu_h * s ||^2 + t2
+        # || mu_h * s ||^2
+        expec_second_order_t1 = expec_first_order.pow(2).sum()
+
+        # t2 approx || s * g ||^2 <r_epsilon, p_diag^2> under circular convolution assumption
+        # || s * g ||^2
+        kernel = fftconvolve(self.s, self.g, mode="full").pow(2).sum()
+        # p_diag^2
+        approximate_P_diag = swft_operators.alpha_to_p_fourier(
+            self.alpha.mean() * self.taylor_arange, self.sr
+        ).pow(2)
+        expec_second_order_t2 = kernel * approximate_P_diag @ self.r_epsilon
+
+        full_expec = (
+            self.y_norm
+            - 2 * self.y @ expec_first_order
+            + expec_second_order_t1
+            + expec_second_order_t2
+        )
+
+        elbo_y = -0.5 * (
+            self.Ly * torch.log(self.sigma_w_2) + full_expec / self.sigma_w_2
+        )
+        self.last_elbo_y = elbo_y.item()
+        return elbo_y
+
+    def elbo_epsilon(self) -> Tensor:
+        elbo_epsilon = -0.5 * (
+            self.Lh * torch.log(self.sigma_epsilon_2)
+            + (self.mu_epsilon @ self.mu_epsilon + self.r_epsilon.sum())
+            / self.sigma_epsilon_2
+            - self.r_epsilon.log().sum()
+        )
+        self.last_elbo_epsilon = elbo_epsilon.item()
+        return elbo_epsilon
+
+    def loss(self) -> Tensor:
+        loss = -(self.elbo_y() + self.elbo_epsilon())
+        self.last_loss = loss.item()
+        return loss
+
+    def parameters_sanity_check(self):
+        with torch.no_grad():
+            # sigma_w_2 must be positive
+            if self.sigma_w_2 < 0:
+                self.sigma_w_2.data[0] = constants.ALMOST_ZERO
+            # sigma_epsilon_2 must be positive
+            if self.sigma_epsilon_2 < 0:
+                self.sigma_epsilon_2.data[0] = constants.ALMOST_ZERO
+            # r_epsilon must be positive
+            self.r_epsilon.clamp_(min=constants.ALMOST_ZERO)
+            # alpha must be positive
+            self.alpha.clamp_(min=constants.ALMOST_ZERO)
+
+    def init_optimizer(self, lr: float):
+        self.optimizer = torch.optim.Adam(
+            [
+                self.mu_epsilon,
+                self.r_epsilon,
+                self.sigma_epsilon_2,
+                self.alpha,
+                self.g,
+                self.sigma_w_2,
+            ],
+            lr=lr,
+        )
 
     def update_step(self):
-        pass
+        self.optimizer.zero_grad()
+        loss = self.loss()
+        loss.backward()
+        self.optimizer.step()
+        self.parameters_sanity_check()
 
-    def fit(self, n_step: int):
+    def fit(self, n_step: int, log_freq: int):
+        self.init_optimizer(lr=1e-2)
+        with torch.no_grad():
+            self.loss()
         for k in tqdm(range(n_step)):
+            self.log_step(k, log_freq)
             self.update_step()
-            self.log_step(k, 10)
+        self.log_step(n_step, 1)
