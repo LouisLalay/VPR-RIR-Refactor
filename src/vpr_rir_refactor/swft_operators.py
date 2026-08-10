@@ -17,6 +17,7 @@ def plot_rt60_operator(alpha: Tensor, sr: int, ax: Axes):
     ax.plot(rt_profile, freqs)
     ax.set_xlabel("RT60 (s)")
     ax.set_ylabel("Frequency (Hz)")
+    ax.set_title("RT60 Operator $e^{-\\alpha(f)}/SR$")
 
 
 def plot_mode_filter(g: Tensor, sr: int, ax: Axes):
@@ -26,6 +27,7 @@ def plot_mode_filter(g: Tensor, sr: int, ax: Axes):
     ax.plot(modes.abs(), freqs)
     ax.set_xlabel("Modes amplitude")
     ax.set_ylabel("Frequency (Hz)")
+    ax.set_title("Mode Filter $g(f)$")
 
 
 def log_swft_parameters(
@@ -42,6 +44,48 @@ def log_swft_parameters(
     plot_mode_filter(g, sr, axs[1])
 
     logger.add_figure(tag="SWFT Operators", figure=fig, global_step=current_step)
+
+
+def plot_rirs(rir_ref: Tensor, rir_other: Tensor, sr: int, ax: Axes):
+    L1 = rir_ref.shape[0]
+    L2 = rir_other.shape[0]
+    time = torch.arange(max(L1, L2)) / sr
+
+    ax.plot(time[:L1], rir_ref, color="red", alpha=0.5, label="Reference")
+    ax.plot(time[:L1], rir_ref, linestyle="--", alpha=0.5, label="Estimation")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
+    ax.legend()
+    ax.set_title("Estimated vs Reference RIR")
+
+
+def plot_rir_diff(rir_ref: Tensor, rir_other: Tensor, sr: int, ax: Axes):
+    L1 = rir_ref.shape[0]
+    L2 = rir_other.shape[0]
+    Lmin = min(L1, L2)
+    time = torch.arange(Lmin) / sr
+
+    diff = rir_ref[:Lmin] - rir_other[:Lmin]
+
+    ax.plot(time, diff.abs())
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
+    ax.set_title("Difference between Estimated and Reference RIR")
+
+
+def log_rirs(
+    logger: SummaryWriter,
+    rir_ref: Tensor,
+    rir_other: Tensor,
+    sr: int,
+    current_step: int,
+):
+    fig = plt.figure(figsize=(12, 6))
+    axs: list[Axes] = fig.subplots(1, 2)
+
+    plot_rirs(rir_ref, rir_other, sr, axs[0])
+    plot_rir_diff(rir_ref, rir_other, sr, axs[1])
+    logger.add_figure(tag="RIRS", figure=fig, global_step=current_step)
 
 
 def create_linear_RT_profile(
