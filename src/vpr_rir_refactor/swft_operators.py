@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from . import constants
+from .torch_pchip import cubic_interp1d as torch_pchip
 
 
 def plot_rt60_operator(alpha: Tensor, sr: int, ax: Axes):
@@ -152,10 +153,15 @@ def create_linear_RT_profile(
         rt60_profile.shape == frequency_bands.shape
     ), "RT60 profile and frequency bands must have the same shape."
 
-    linear_freqs = torch.linspace(0, frequency_bands[-1], n_fft // 2 + 1)
-    interpolator = PchipInterpolator(frequency_bands.numpy(), rt60_profile.numpy())
-    linear_rt_profile = interpolator(linear_freqs)
-    return torch.from_numpy(linear_rt_profile)
+    linear_freqs = torch.linspace(
+        0,
+        frequency_bands[-1],
+        n_fft // 2 + 1,
+        dtype=frequency_bands.dtype,
+        device=frequency_bands.device,
+    )
+    linear_rt_profile = torch_pchip(frequency_bands, rt60_profile, linear_freqs)
+    return linear_rt_profile.to(dtype=rt60_profile.dtype)
 
 
 def rt_profile_to_alpha(linear_rt_profile: Tensor) -> Tensor:
