@@ -270,8 +270,8 @@ class VPR_RIR2:
         self.optimizer.step()
         self.parameters_sanity_check()
 
-    def fit(self, n_step: int, log_freq: int):
-        self.init_optimizer(lr=1e-3)
+    def fit(self, n_step: int, log_freq: int, lr: float = 1e-3):
+        self.init_optimizer(lr=lr)
         with torch.no_grad():
             self.loss()
         for k in tqdm(range(n_step)):
