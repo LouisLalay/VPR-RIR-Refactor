@@ -4,11 +4,13 @@ from .evaluate import log_metrics
 
 from datetime import datetime
 from pathlib import Path
+from soundfile import write
 from torch import Tensor
 from torch.nn import Parameter
 from torch.utils.tensorboard.writer import SummaryWriter
 from torchaudio.functional import fftconvolve
 from tqdm import tqdm
+import json
 import torch
 
 
@@ -24,7 +26,7 @@ class VPR_RIR2:
         sr: int,
         device: torch.device,
         dtype: torch.dtype,
-        experiment_dir: str | Path = "runs/tests",
+        experiment_dir: Path = Path("runs/tests"),
     ) -> None:
         # torch default tensor args
         self.tensor_args = {
@@ -68,10 +70,7 @@ class VPR_RIR2:
         self.s = source.to(**self.tensor_args)
         self.rir_ref = reference_rir.to(dtype=dtype)
 
-        # Init tensorboard
-        exp_name = datetime.now().strftime("%Y-%m-%d %Hh%M-%S")
-        self.full_exp_path = Path(experiment_dir) / exp_name
-        self.logger = SummaryWriter(self.full_exp_path)
+        self.xp_dir = experiment_dir
 
         # Init constants for loss computation
         self.init_constants()
@@ -101,6 +100,12 @@ class VPR_RIR2:
 
     def __str__(self) -> str:
         return self.__repr__()
+
+    def init_logger(self, experiment_dir: Path):
+        exp_name = datetime.now().strftime("%Y-%m-%d %Hh%M-%S")
+        self.full_exp_path = Path(experiment_dir) / exp_name
+        self.full_exp_path.mkdir(parents=True, exist_ok=True)
+        self.logger = SummaryWriter(self.full_exp_path)
 
     def init_parameters(self):
         self.mu_epsilon.data = torch.randn_like(self.mu_epsilon)
@@ -176,6 +181,7 @@ class VPR_RIR2:
         full_rt = swft_operators.create_linear_RT_profile(
             current_rt,
             self.alpha_freqs,
+            self.sr,
             self.nfft,
         )
         full_alpha = swft_operators.rt_profile_to_alpha(full_rt)
@@ -271,6 +277,7 @@ class VPR_RIR2:
         self.parameters_sanity_check()
 
     def fit(self, n_step: int, log_freq: int, lr: float = 1e-3):
+        self.init_logger(self.xp_dir)
         self.init_optimizer(lr=lr)
         with torch.no_grad():
             self.loss()
@@ -278,3 +285,30 @@ class VPR_RIR2:
             self.log_step(k, log_freq)
             self.update_step()
         self.log_step(n_step, 1)
+        return self.get_estimates()
+
+    def fit_experiment(self, n_step: int, lr: float):
+        self.init_optimizer(lr=lr)
+        for k in tqdm(range(n_step)):
+            self.update_step()
+        return self.get_estimates()
+
+    def get_estimates(self):
+        # RIR estimate
+        rir_estimate = self.mu_h().detach().cpu().numpy()
+
+        # SWFT parameters
+        alpha_estimate = self.alpha.detach().cpu()
+        g_estimate = self.g.detach().cpu()
+
+        # Noise parameter
+        sigma_w_2_estimate = self.sigma_w_2.item()
+
+        parameters = {
+            "alpha": alpha_estimate.tolist(),
+            "alpha_freqs": self.alpha_freqs.tolist(),
+            "g": g_estimate.tolist(),
+            "sigma_w_2": sigma_w_2_estimate,
+        }
+
+        return rir_estimate, parameters
