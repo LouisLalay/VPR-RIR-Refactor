@@ -1,10 +1,10 @@
 from __future__ import annotations
-from .loading import prepare_signals, Signals
 from .data import discover_BRAS, discover_librispeech, discover_Whamr
-from datetime import datetime
+from .loading import prepare_signals, Signals
 from pathlib import Path
 from typing import Literal, NamedTuple
 import csv
+import hashlib
 import random
 import subprocess
 import torch
@@ -279,7 +279,7 @@ def _get_git_commit_hash() -> str:
         raise ValueError("Not a git repository") from e
 
 
-def create_xp_from_template(template_path: Path) -> None:
+def create_xp_from_template(template_path: Path) -> Path:
     """
     Create an experiment directory populated with config.yaml and
     files.csv, from a template file.
@@ -304,9 +304,14 @@ def create_xp_from_template(template_path: Path) -> None:
         )
         git_commit_hash = ""
 
-    # Create a unique experiment name bound to the current git commit hash
-    current_date = datetime.now().strftime("%Y-%m-%d %Hh%M-%S")
-    exp_dir = template_path.parent / f"{current_date}__{git_commit_hash}"
+    # Create a unique experiment name bound to the current git commit hash and template
+    template_hash = hashlib.sha256(
+        yaml.safe_dump(template).encode("utf-8")
+    ).hexdigest()[:8]
+    exp_dir = template_path.parent / f"{template_hash}__{git_commit_hash}"
+    if exp_dir.exists():
+        return exp_dir
+
     exp_dir.mkdir(parents=True, exist_ok=True)
 
     # Load the available datasets
@@ -341,3 +346,5 @@ def create_xp_from_template(template_path: Path) -> None:
     # One entry per method, kept separate from the shared config
     with (exp_dir / "methods.yaml").open("w") as f:
         yaml.safe_dump(template["method"], f, sort_keys=False)
+
+    return exp_dir
