@@ -11,6 +11,8 @@ from torchaudio.functional import fftconvolve
 from tqdm import tqdm
 import torch
 
+_DTYPE_FROM_STR = {"float32": torch.float32, "float64": torch.float64}
+
 
 class VPR_RIR2:
     def __init__(
@@ -21,6 +23,8 @@ class VPR_RIR2:
         Lh: int,
         Lg: int,
         Lalpha: int,
+        lr: float,
+        n_steps: int,
         sr: int,
         device: torch.device,
         dtype: torch.dtype,
@@ -41,6 +45,10 @@ class VPR_RIR2:
         self.Ls = source.shape[0]
         # Full signal length
         self.Ly = self.Ls + self.Lh - 1
+        # Learning rate
+        self.lr = lr
+        # Number of optimization steps
+        self.n_steps = n_steps
         # Sampling rate
         self.sr = sr
 
@@ -285,9 +293,9 @@ class VPR_RIR2:
         self.log_step(n_step, 1)
         return self.get_estimates()
 
-    def fit_experiment(self, n_step: int, lr: float):
-        self.init_optimizer(lr=lr)
-        for k in tqdm(range(n_step)):
+    def fit_experiment(self):
+        self.init_optimizer(self.lr)
+        for k in tqdm(range(self.n_steps)):
             self.update_step()
         return self.get_estimates()
 
@@ -310,3 +318,57 @@ class VPR_RIR2:
         }
 
         return rir_estimate, parameters
+
+
+def validate_vpr_kwargs(kwargs: dict):
+    required_keys = {
+        "Lh": int,
+        "Lg": int,
+        "Lalpha": int,
+        "lr": float,
+        "n_steps": int,
+        "sr": int,
+        "device": torch.device,
+        "dtype": torch.dtype,
+    }
+    valid_kwargs = {}
+    for key, expected_type in required_keys.items():
+        if key not in kwargs:
+            raise ValueError(f"Missing required argument: {key}")
+        value = kwargs[key]
+
+        try:
+            if expected_type is int:
+                # For integers
+                converted = int(value)
+                if isinstance(value, float) and converted != value:
+                    raise ValueError(f"{value} is not an integer.")
+
+            elif expected_type is torch.dtype:
+                # For dtype
+                if isinstance(value, torch.dtype):
+                    converted = value
+                else:
+                    converted = _DTYPE_FROM_STR[str(value)]
+
+            elif expected_type is torch.device:
+                # For device
+                converted = torch.device(value)
+
+            elif expected_type is Path:
+                # For Path
+                converted = Path(value)
+
+            else:
+                # Wild card, should not happen
+                converted = expected_type(value)
+
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(
+                f"Cannot convert argument {key!r} with value {value!r} "
+                f"to {expected_type}: {e}"
+            ) from e
+
+        valid_kwargs[key] = converted
+
+    return valid_kwargs
