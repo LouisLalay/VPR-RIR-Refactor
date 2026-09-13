@@ -314,3 +314,47 @@ def taylor_mul(
 
     y = cast(Tensor, torch.fft.irfft(y_fourier, nfft))[:Lh]
     return y.real
+
+
+def naive_taylor_mul(
+    epsilon: Tensor,
+    p_fourier: Tensor,
+    omega: Tensor,
+    nfft: int,
+):
+    """
+    (P epsilon)(z) = E(z / P(z)) = sum epsilon[n] P(z)^n z^(-n)
+    """
+    Lh = epsilon.shape[0]
+    # Can be computed as a polynomial evaluation
+    eval_points = p_fourier * omega
+    coeffs = epsilon.flip(0)
+    h_bar_fourier = torch_polyval(coeffs, eval_points)
+
+    return cast(Tensor, torch.fft.irfft(h_bar_fourier, nfft))[:Lh].real
+
+
+def torch_polyval(coeffs: Tensor, z: Tensor) -> Tensor:
+    """
+    Evaluate a polynomial using Horner's method.
+
+    P(z) = coeffs[0] * z^(n-1) + coeffs[1] * z^(n-2) + ... + coeffs[-1]
+
+    Args:
+        coeffs: 1D tensor of polynomial coefficients, highest degree first.
+                Complex or real dtype supported.
+        z: Tensor of evaluation points (any shape), may be complex.
+
+    Returns:
+        Tensor of the same shape as z (broadcast with nothing else needed,
+        since coeffs is a vector), with promoted dtype.
+    """
+
+    dtype = torch.promote_types(coeffs.dtype, z.dtype)
+    coeffs = coeffs.to(dtype)
+    z = z.to(dtype)
+
+    result = torch.zeros_like(z)
+    for c in coeffs:
+        result = result * z + c
+    return result
