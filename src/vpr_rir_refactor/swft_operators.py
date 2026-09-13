@@ -127,10 +127,47 @@ def log_epsilon(
     logger.add_figure(tag=tag, figure=fig, global_step=current_step)
 
 
+def interpolate(x: Tensor, y: Tensor, x_new: Tensor, method: str = "pchip") -> Tensor:
+    """
+    A differentialble interpolation function.
+
+    Args:
+        x (Tensor):
+            The input tensor of shape (n,) containing the x-coordinates of the data points.
+        y (Tensor):
+            The input tensor of shape (n,) containing the y-coordinates of the data points.
+        x_new (Tensor):
+            The input tensor of shape (m,) containing the x-coordinates of the interpolated points.
+        method (str, optional):
+            The interpolation method to use. Defaults to "pchip". "linear" is also supported.
+    Returns:
+        Tensor:
+            The interpolated tensor of shape (m,) containing the y-coordinates of the interpolated points.
+    Raises:
+        ValueError:
+            If the specified interpolation method is not supported.
+    """
+
+    match method:
+        case "pchip":
+            return torch_pchip(x, y, x_new)
+        case "linear":
+            return torch.nn.functional.interpolate(
+                y.unsqueeze(0).unsqueeze(0),
+                size=x_new.shape[0],
+                mode="linear",
+                align_corners=True,
+            ).squeeze()
+        case _:
+            raise ValueError(f"Unsupported interpolation method '{method}'.")
+
+
 def create_linear_RT_profile(
     rt60_profile: Tensor,
-    frequency_bands: Tensor,
+    center_freqs: Tensor,
+    sr: int,
     n_fft: int,
+    interpolation_method: str = "pchip",
 ) -> Tensor:
     """
     Create a linear RT60 profile.
@@ -138,8 +175,10 @@ def create_linear_RT_profile(
     Args:
         rt60_profile (Tensor):
             The RT60 profile tensor of shape (n_f_bands) in seconds.
-        frequency_bands (Tensor):
-            The frequency bands tensor of shape (n_f_bands) containing the center frequencies of the bands in Hz.
+        center_freqs (Tensor):
+            The center frequencies tensor of shape (n_f_bands) containing the center frequencies of the bands in Hz.
+        sr (int):
+            The sample rate in Hz.
         n_fft (int):
             The number of FFT points for the interpolation.
     Returns:
@@ -147,20 +186,74 @@ def create_linear_RT_profile(
             A tensor of shape (n_fft) containing the interpolated RT60 values for each FFT point.
     Raises:
         AssertionError:
-            If the shapes of rt60_profile and frequency_bands do not match.
+            If the shapes of rt60_profile and center_freqs do not match.
     """
     assert (
-        rt60_profile.shape == frequency_bands.shape
-    ), "RT60 profile and frequency bands must have the same shape."
+        rt60_profile.shape == center_freqs.shape
+    ), "RT60 profile and center frequencies must have the same shape."
 
     linear_freqs = torch.linspace(
         0,
-        frequency_bands[-1],
+        sr // 2,
         n_fft // 2 + 1,
-        dtype=frequency_bands.dtype,
-        device=frequency_bands.device,
+        dtype=center_freqs.dtype,
+        device=center_freqs.device,
     )
-    linear_rt_profile = torch_pchip(frequency_bands, rt60_profile, linear_freqs)
+    linear_rt_profile = interpolate(
+        center_freqs,
+        rt60_profile,
+        linear_freqs,
+        method=interpolation_method,
+    )
+    return linear_rt_profile.to(dtype=rt60_profile.dtype)
+
+
+def create_log_RT_profile(
+    rt60_profile: Tensor,
+    center_freqs: Tensor,
+    start_freq: float,
+    sr: int,
+    n_fft: int,
+    interpolation_method: str = "pchip",
+) -> Tensor:
+    """
+    Create a logarithmic RT60 profile.
+
+    Args:
+        rt60_profile (Tensor):
+            The RT60 profile tensor of shape (n_f_bands) in seconds.
+        center_freqs (Tensor):
+            The center frequencies tensor of shape (n_f_bands) containing the center frequencies of the bands in Hz.
+        sr (int):
+            The sample rate in Hz.
+        start_freq (float):
+            The starting frequency in Hz.
+        n_fft (int):
+            The number of FFT points for the interpolation.
+    Returns:
+        Tensor:
+            A tensor of shape (n_fft) containing the interpolated RT60 values for each FFT point.
+    Raises:
+        AssertionError:
+            If the shapes of rt60_profile and center_freqs do not match.
+    """
+    assert (
+        rt60_profile.shape == center_freqs.shape
+    ), "RT60 profile and center frequencies must have the same shape."
+
+    log_freqs = torch.logspace(
+        torch.log10(torch.tensor(start_freq)),
+        torch.log10(torch.tensor(sr // 2)),
+        n_fft // 2 + 1,
+        dtype=center_freqs.dtype,
+        device=center_freqs.device,
+    )
+    linear_rt_profile = interpolate(
+        center_freqs,
+        rt60_profile,
+        log_freqs,
+        method=interpolation_method,
+    )
     return linear_rt_profile.to(dtype=rt60_profile.dtype)
 
 
