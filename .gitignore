@@ -15,3 +15,6 @@ sandbox.py
 
 # Experiments
 runs
+experiments/*
+# Include the template.yaml file in the experiments folder
+!experiments/template.yaml
