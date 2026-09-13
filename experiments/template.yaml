@@ -1,0 +1,27 @@
+seed: 0
+dtype: float32
+sr: 16000
+n_samples: 160000
+noise_type: gaussian
+snr_dB: 5.0
+rir_norm: peak
+rir_silence_thresh: 1.0e-6
+n_runs: 20
+
+datasets:
+  sources: "/home/louis/Nextcloud/Nextcloud-Perso/These/Datasets/LibriSpeech"
+  rirs: "/home/louis/Nextcloud/Nextcloud-Perso/These/Datasets/BRAS"
+  noises: "/home/louis/Nextcloud/Nextcloud-Perso/These/Datasets/Whamr"
+
+method:
+  our_method:
+    name: vpr_rir
+    kwargs:
+      Lh: 8000
+      Lg: 64
+      Lalpha: 16
+      lr: 0.001
+  baseline_1:
+    name: baseline_1
+    kwargs:
+      nfft: 512
