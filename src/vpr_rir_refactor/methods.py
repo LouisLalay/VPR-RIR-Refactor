@@ -1,4 +1,4 @@
-from .baselines import Baseline1, validate_baseline1_kwargs
+from .baselines import *
 from .experiments import ExperimentConfig, _load_experiment_config
 from .loading import prepare_signals, Signals
 from .mixing import reverberant_mix
@@ -45,6 +45,8 @@ class MethodSpec(NamedTuple):
 KNOWN_METHODS = {
     "vpr_rir": MethodSpec(cls=VPR_RIR2, validate=validate_vpr_kwargs),
     "baseline_1": MethodSpec(cls=Baseline1, validate=validate_baseline1_kwargs),
+    "baseline_2": MethodSpec(cls=Baseline2, validate=validate_baseline2_kwargs),
+    "baseline_3": MethodSpec(cls=Baseline3, validate=validate_baseline3_kwargs),
 }
 
 
