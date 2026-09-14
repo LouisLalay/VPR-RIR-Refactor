@@ -1,25 +1,31 @@
 seed: 0
 dtype: float32
 sr: 16000
-n_samples: 160000
+n_samples: 80000
 noise_type: gaussian
 snr_dB: 5.0
 rir_norm: peak
 rir_silence_thresh: 1.0e-6
-n_runs: 5
+n_runs: 20
 
 datasets:
-  sources: "/home/louis/Nextcloud/Nextcloud-Perso/These/Datasets/LibriSpeech"
-  rirs: "/home/louis/Nextcloud/Nextcloud-Perso/These/Datasets/BRAS"
-  noises: "/home/louis/Nextcloud/Nextcloud-Perso/These/Datasets/Whamr"
+  sources: "path/to/LibriSpeech"
+  rirs: "path/to/BRAS"
+  noises: "path/to/Whamr"
 
 method:
   vpr_rir:
-    Lh: 8000
+    Lh: 32000
     Lg: 64
     Lalpha: 16
     lr: 0.001
-    n_steps: 100
-    device: cpu
+    n_steps: 5000
+    device: cuda
   baseline_1:
+    none: none
+  baseline_2:
+    none: none
+  baseline_3:
     nfft: 512
+    hop_length: 256
+    num_absolute_cross_bands: 1
