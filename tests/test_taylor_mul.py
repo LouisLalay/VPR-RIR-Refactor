@@ -28,11 +28,12 @@ def test_interpolated_rt():
     interpolated_rt_ref = p_op_ref.interpolated_rt
     nfft = p_op_ref.nfft
 
-    frequency_bands = torch.from_numpy(swft_room.center_freqs)
+    center_freqs = torch.from_numpy(swft_room.center_freqs)
     rt60_profile = torch.from_numpy(swft_room.get_rt60_profile())
     interpolated_rt_test = create_linear_RT_profile(
         rt60_profile=rt60_profile,
-        frequency_bands=frequency_bands,
+        center_freqs=center_freqs,
+        sr=swft_room.room.fs,
         n_fft=nfft,
     )
 
