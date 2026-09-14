@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "seaborn>=0.13.2",
     "selfeeg>=0.2.2",
     "taylor-swft>=0.1.0",
     "tensorboard>=2.21.0",
